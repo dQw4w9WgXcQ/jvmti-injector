@@ -1,0 +1,19 @@
+{
+    "C_Cpp.default.includePath": [
+        "C:\\Program Files\\Eclipse Adoptium\\jdk-11.0.23.9-hotspot\\include",
+        "C:\\Program Files\\Eclipse Adoptium\\jdk-11.0.23.9-hotspot\\include\\win32",
+        "C:\\Program Files\\Eclipse Adoptium\\jdk-11.0.23.9-hotspot\\lib"
+    ],
+    "files.associations": {
+        "iostream": "cpp",
+        "fstream": "cpp",
+        "memory": "cpp",
+        "string": "cpp",
+        "xstring": "cpp",
+        "stdexcept": "cpp",
+        "system_error": "cpp",
+        "filesystem": "cpp",
+        "chrono": "cpp",
+        "format": "cpp"
+    }
+}
