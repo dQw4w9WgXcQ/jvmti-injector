@@ -1,7 +1,4 @@
-// g++ -shared -o payload.dll payload.cpp -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include" -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include\win32" -L"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\lib" -ljvm
-
-// Uncomment to enable debug logging
-#define DEBUG_LOGGING
+// g++ -DDEBUG_LOGGING -shared -o "C:\Users\user\Desktop\payload.dll" payload.cpp -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include" -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include\win32" -L"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\lib" -ljvm
 
 #include <iostream>
 #include <fstream>
@@ -56,7 +53,7 @@ public:
     void log(const T &message)
     {
         std::stringstream ss;
-        ss << "[" << getCurrentTimestamp() << "] " << message << std::endl;
+        ss << getCurrentTimestamp() << " - " << message << std::endl;
         std::cout << ss.str();
         logFile << ss.str();
         logFile.flush();

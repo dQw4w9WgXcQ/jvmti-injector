@@ -1,4 +1,4 @@
-g++ -shared -o payload.dll payload.cpp -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include" -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include\win32" -L"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\lib" -ljvm
+g++ -DDEBUG_LOGGING -shared -o "C:\Users\user\Desktop\payload.dll" payload.cpp -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include" -I"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\include\win32" -L"C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot\lib" -ljvm
 
 g++ -o injector injector.cpp -fpermissive
 
