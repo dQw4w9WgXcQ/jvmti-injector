@@ -91,47 +91,25 @@ Logger logger((std::filesystem::path(get_user_home_path()) / "Desktop" / "log.tx
 #define LOGF(format, ...)
 #endif
 
-void init()
+const char *ENTRY_CLASS = "org.example.Entry";
+const char *ENTRY_METHOD_NAME = "entry";
+const char *ENTRY_METHOD_SIGNATURE = "()V";
+const char *RUNELITE_CLASS = "Lnet/runelite/client/RuneLite;";
+
+const char *URL_CLASS = "java/net/URL";
+const char *URL_CONSTRUCTOR_SIGNATURE = "(Ljava/lang/String;)V";
+const char *URL_CLASSLOADER_CLASS = "java/net/URLClassLoader";
+const char *URL_CLASSLOADER_CONSTRUCTOR_SIGNATURE = "([Ljava/net/URL;Ljava/lang/ClassLoader;)V";
+const char *LOAD_CLASS_NAME = "loadClass";
+const char *LOAD_CLASS_SIGNATURE = "(Ljava/lang/String;)Ljava/lang/Class;";
+
+void redefine_classes(jvmtiEnv *jvmtiEnv, JNIEnv *jniEnv)
 {
-    LOG("hi from init");
-
-    // Get the created Java VMs
-    JavaVM *javaVMs[1];
-    jsize numVMs;
-    jint result = JNI_GetCreatedJavaVMs(javaVMs, 1, &numVMs);
-    if (result != JNI_OK)
+    // Load the new class bytes from a file
+    std::unique_ptr<FILE, decltype(&fclose)> file(fopen(CLASS_FILE_PATH.c_str(), "rb"), &fclose);
+    if (!file)
     {
-        LOGF("Failed to get created Java VMs: %d", result);
-        return;
-    }
-
-    LOGF("Number of created Java VMs: %d", numVMs);
-
-    if (numVMs <= 0)
-    {
-        LOG("No Java VMs found");
-        return;
-    }
-
-    JavaVM *javaVm = javaVMs[0];
-    JNIEnv *jniEnv;
-
-    // Attach the current thread to the Java VM as a daemon thread
-    result = javaVm->AttachCurrentThreadAsDaemon((void **)&jniEnv, nullptr);
-    if (result != JNI_OK)
-    {
-        LOGF("Failed to attach to the Java VM as a daemon thread: %d", result);
-        return;
-    }
-
-    LOG("Successfully attached to the Java VM as a daemon thread");
-
-    // Get the jvmti env
-    jvmtiEnv *jvmtiEnv;
-    result = javaVm->GetEnv((void **)&jvmtiEnv, JVMTI_VERSION_1_0);
-    if (result != JNI_OK)
-    {
-        LOGF("Failed to get the JVMTI environment: %d", result);
+        LOG("Failed to open the class file");
         return;
     }
 
@@ -140,7 +118,7 @@ void init()
     memset(&capabilities, 0, sizeof(capabilities));
     capabilities.can_redefine_classes = 1;
 
-    result = jvmtiEnv->AddCapabilities(&capabilities);
+    jint result = jvmtiEnv->AddCapabilities(&capabilities);
     if (result != JVMTI_ERROR_NONE)
     {
         LOGF("Failed to add the can_redefine_classes capability error code: %d", result);
@@ -152,14 +130,6 @@ void init()
     if (myClass == nullptr)
     {
         LOG("Failed to find the class MyClass");
-        return;
-    }
-
-    // Load the new class bytes from a file
-    std::unique_ptr<FILE, decltype(&fclose)> file(fopen(CLASS_FILE_PATH.c_str(), "rb"), &fclose);
-    if (!file)
-    {
-        LOG("Failed to open the class file");
         return;
     }
 
@@ -185,9 +155,55 @@ void init()
     }
 
     LOG("Successfully redefined the class");
+}
 
-    // Detach the current thread from the Java VM
-    javaVm->DetachCurrentThread();
+void init()
+{
+    LOG("hi from init");
+
+    // Get the created Java VMs
+    JavaVM *javaVMs[1];
+    jsize numVMs;
+    jint result = JNI_GetCreatedJavaVMs(javaVMs, 1, &numVMs);
+    if (result != JNI_OK)
+    {
+        LOGF("Failed to get created Java VMs: %d", result);
+        return;
+    }
+
+    LOGF("Number of created Java VMs: %d", numVMs);
+
+    if (numVMs <= 0)
+    {
+        LOG("No Java VMs found");
+        return;
+    }
+
+    JavaVM *jvm = javaVMs[0];
+    JNIEnv *jniEnv;
+
+    // Attach the current thread to the Java VM as a daemon thread
+    result = jvm->AttachCurrentThreadAsDaemon((void **)&jniEnv, nullptr);
+    if (result != JNI_OK)
+    {
+        LOGF("Failed to attach to the Java VM as a daemon thread: %d", result);
+        return;
+    }
+
+    LOG("Successfully attached to the Java VM as a daemon thread");
+
+    // Get the jvmti env
+    jvmtiEnv *jvmtiEnv;
+    result = jvm->GetEnv((void **)&jvmtiEnv, JVMTI_VERSION_1_0);
+    if (result != JNI_OK)
+    {
+        LOGF("Failed to get the JVMTI environment: %d", result);
+        return;
+    }
+
+    redefine_classes(jvmtiEnv, jniEnv);
+
+    jvm->DetachCurrentThread();
 }
 
 #ifdef _WIN32

@@ -1,4 +1,4 @@
-// g++ -o injector injector.cpp -fpermissive
+// g++ -o "C:\Users\user\Desktop\injector.exe" injector.cpp -fpermissive
 
 #include <stdio.h>
 #include <stdlib.h>
