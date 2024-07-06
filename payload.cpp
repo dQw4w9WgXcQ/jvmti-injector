@@ -91,20 +91,11 @@ Logger logger((std::filesystem::path(get_user_home_path()) / "Desktop" / "log.tx
 #define LOGF(format, ...)
 #endif
 
-const char *ENTRY_CLASS = "org.example.Entry";
-const char *ENTRY_METHOD_NAME = "entry";
-const char *ENTRY_METHOD_SIGNATURE = "()V";
-const char *RUNELITE_CLASS = "Lnet/runelite/client/RuneLite;";
-
-const char *URL_CLASS = "java/net/URL";
-const char *URL_CONSTRUCTOR_SIGNATURE = "(Ljava/lang/String;)V";
-const char *URL_CLASSLOADER_CLASS = "java/net/URLClassLoader";
-const char *URL_CLASSLOADER_CONSTRUCTOR_SIGNATURE = "([Ljava/net/URL;Ljava/lang/ClassLoader;)V";
-const char *LOAD_CLASS_NAME = "loadClass";
-const char *LOAD_CLASS_SIGNATURE = "(Ljava/lang/String;)Ljava/lang/Class;";
+// redefine_classes
 
 void redefine_classes(jvmtiEnv *jvmtiEnv, JNIEnv *jniEnv)
 {
+    LOG("redifine_classes");
     // Load the new class bytes from a file
     std::unique_ptr<FILE, decltype(&fclose)> file(fopen(CLASS_FILE_PATH.c_str(), "rb"), &fclose);
     if (!file)
@@ -121,7 +112,7 @@ void redefine_classes(jvmtiEnv *jvmtiEnv, JNIEnv *jniEnv)
     jint result = jvmtiEnv->AddCapabilities(&capabilities);
     if (result != JVMTI_ERROR_NONE)
     {
-        LOGF("Failed to add the can_redefine_classes capability error code: %d", result);
+        LOGF("AddCapabilities failed: %d", result);
         return;
     }
 
@@ -150,16 +141,121 @@ void redefine_classes(jvmtiEnv *jvmtiEnv, JNIEnv *jniEnv)
     jvmtiError error = jvmtiEnv->RedefineClasses(1, &classDef);
     if (error != JVMTI_ERROR_NONE)
     {
-        LOGF("Failed to redefine the class error code: %d", error);
+        LOGF("RedefineClasses failed: %d", error);
         return;
     }
 
     LOG("Successfully redefined the class");
 }
 
+// launch
+const char *RUNELITE_CLASS = "Lnet/runelite/client/RuneLite;";
+
+const char *ENTRY_CLASS = "org.example.Entry";
+const char *ENTRY_METHOD_NAME = "entry";
+const char *ENTRY_METHOD_SIGNATURE = "()V";
+
+std::filesystem::path LAUNCH_JAR_PATH = std::filesystem::path(get_user_home_path()) / "Desktop" / "entry.jar";
+
+const char *URL_CLASS = "java/net/URL";
+const char *URL_CONSTRUCTOR_SIGNATURE = "(Ljava/lang/String;)V";
+const char *URL_CLASSLOADER_CLASS = "java/net/URLClassLoader";
+const char *URL_CLASSLOADER_CONSTRUCTOR_SIGNATURE = "([Ljava/net/URL;Ljava/lang/ClassLoader;)V";
+const char *LOAD_CLASS_NAME = "loadClass";
+const char *LOAD_CLASS_SIGNATURE = "(Ljava/lang/String;)Ljava/lang/Class;";
+
+jobject get_runelite_class_loader(JNIEnv *jni, jvmtiEnv *jvmti)
+{
+    jint class_count;
+    jclass *classes;
+    jvmtiError error = jvmti->GetLoadedClasses(&class_count, &classes);
+    if (error != JVMTI_ERROR_NONE)
+    {
+        LOGF("GetLoadedClasses failed: %d", error);
+    }
+
+    for (jint i = 0; i < class_count; i++)
+    {
+        char *signature;
+        error = jvmti->GetClassSignature(classes[i], &signature, nullptr);
+        if (error != JVMTI_ERROR_NONE)
+        {
+            LOGF("GetClassSignature failed: %d", error);
+            return nullptr;
+        }
+
+        if (std::string(signature) == RUNELITE_CLASS)
+        {
+            jobject class_loader;
+            error = jvmti->GetClassLoader(classes[i], &class_loader);
+            jvmti->Deallocate(reinterpret_cast<unsigned char *>(signature));
+            if (error != JVMTI_ERROR_NONE)
+            {
+                LOGF("GetClassLoader failed: %d", error);
+                return nullptr;
+            }
+
+            return class_loader;
+        }
+
+        jvmti->Deallocate(reinterpret_cast<unsigned char *>(signature));
+    }
+
+    return nullptr;
+}
+
+jobject loadJar(JNIEnv *jni, jobject parentClassLoader)
+{
+    std::string file_jar_path = "file:" + LAUNCH_JAR_PATH.string();
+
+    jstring jJarPath = jni->NewStringUTF(file_jar_path.c_str());
+    jclass urlClass = jni->FindClass(URL_CLASS);
+    jmethodID urlConstructor = jni->GetMethodID(urlClass, "<init>", URL_CONSTRUCTOR_SIGNATURE);
+    jobject url = jni->NewObject(urlClass, urlConstructor, jJarPath);
+
+    jobjectArray urlArray = jni->NewObjectArray(1, urlClass, url);
+
+    jclass urlClassLoaderClass = jni->FindClass(URL_CLASSLOADER_CLASS);
+    jmethodID urlClassLoaderConstructor = jni->GetMethodID(urlClassLoaderClass, "<init>", URL_CLASSLOADER_CONSTRUCTOR_SIGNATURE);
+    return jni->NewObject(urlClassLoaderClass, urlClassLoaderConstructor, urlArray, parentClassLoader);
+}
+
+void initJar(JNIEnv *jni, jobject classLoader)
+{
+    jstring mainClass = jni->NewStringUTF(ENTRY_CLASS);
+    jclass urlClassLoaderClass = jni->GetObjectClass(classLoader);
+    jmethodID loadClassMethod = jni->GetMethodID(urlClassLoaderClass, LOAD_CLASS_NAME, LOAD_CLASS_SIGNATURE);
+
+    jobject classObj = jni->CallObjectMethod(classLoader, loadClassMethod, mainClass);
+    if (classObj == nullptr)
+    {
+        LOG("Failed to load the entry class");
+        return;
+    }
+
+    jclass oxideClass = static_cast<jclass>(classObj);
+    jmethodID entryMethod = jni->GetStaticMethodID(oxideClass, ENTRY_METHOD_NAME, ENTRY_METHOD_SIGNATURE);
+    jni->CallStaticVoidMethod(oxideClass, entryMethod);
+}
+
+void launch(jvmtiEnv *jvmti, JNIEnv *jni)
+{
+    LOG("launch");
+
+    jobject rl_class_loader = get_runelite_class_loader(jni, jvmti);
+    if (rl_class_loader == nullptr)
+    {
+        LOG("Failed to get the RuneLite class loader");
+        return;
+    }
+
+    jobject urlClassLoader = loadJar(jni, rl_class_loader);
+    initJar(jni, urlClassLoader);
+}
+
 void init()
 {
-    LOG("hi from init");
+    LOG("init");
 
     // Get the created Java VMs
     JavaVM *javaVMs[1];
@@ -167,11 +263,9 @@ void init()
     jint result = JNI_GetCreatedJavaVMs(javaVMs, 1, &numVMs);
     if (result != JNI_OK)
     {
-        LOGF("Failed to get created Java VMs: %d", result);
+        LOGF("JNI_GetCreatedJavaVMs failed: %d", result);
         return;
     }
-
-    LOGF("Number of created Java VMs: %d", numVMs);
 
     if (numVMs <= 0)
     {
@@ -186,7 +280,7 @@ void init()
     result = jvm->AttachCurrentThreadAsDaemon((void **)&jniEnv, nullptr);
     if (result != JNI_OK)
     {
-        LOGF("Failed to attach to the Java VM as a daemon thread: %d", result);
+        LOGF("AttachCurrentThreadAsDaemon failed: %d", result);
         return;
     }
 
@@ -197,11 +291,15 @@ void init()
     result = jvm->GetEnv((void **)&jvmtiEnv, JVMTI_VERSION_1_0);
     if (result != JNI_OK)
     {
-        LOGF("Failed to get the JVMTI environment: %d", result);
+        LOGF("GetEnv failed: %d", result);
         return;
     }
 
-    redefine_classes(jvmtiEnv, jniEnv);
+    // redefine_classes(jvmtiEnv, jniEnv);
+
+    Sleep(1000);
+
+    launch(jvmtiEnv, jniEnv);
 
     jvm->DetachCurrentThread();
 }
