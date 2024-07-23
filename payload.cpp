@@ -151,11 +151,11 @@ void redefine_classes(jvmtiEnv *jvmtiEnv, JNIEnv *jniEnv)
 // launch
 const char *RUNELITE_CLASS = "Lnet/runelite/client/RuneLite;";
 
-const char *ENTRY_CLASS = "org.example.Entry";
+const char *ENTRY_CLASS = "rickk.Entry";
 const char *ENTRY_METHOD_NAME = "entry";
 const char *ENTRY_METHOD_SIGNATURE = "()V";
 
-std::filesystem::path LAUNCH_JAR_PATH = std::filesystem::path(get_user_home_path()) / "Desktop" / "entry.jar";
+std::filesystem::path ENTRY_JAR_PATH = std::filesystem::path(get_user_home_path()) / "Desktop" / "entry.jar";
 
 const char *URL_CLASS = "java/net/URL";
 const char *URL_CONSTRUCTOR_SIGNATURE = "(Ljava/lang/String;)V";
@@ -206,7 +206,7 @@ jobject get_runelite_class_loader(JNIEnv *jni, jvmtiEnv *jvmti)
 
 jobject loadJar(JNIEnv *jni, jobject parentClassLoader)
 {
-    std::string file_jar_path = "file:" + LAUNCH_JAR_PATH.string();
+    std::string file_jar_path = "file:" + ENTRY_JAR_PATH.string();
 
     jstring jJarPath = jni->NewStringUTF(file_jar_path.c_str());
     jclass urlClass = jni->FindClass(URL_CLASS);
